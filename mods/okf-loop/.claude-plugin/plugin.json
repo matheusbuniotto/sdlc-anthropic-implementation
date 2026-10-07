@@ -1,0 +1,8 @@
+{
+  "name": "okf-loop",
+  "version": "0.1.0",
+  "description": "Runs openknowledge/INDEX.md: the AI-Native SDLC as a live, customizable, semi-autonomous loop with gates, guards and an audit trail.",
+  "author": { "name": "okf-loop contributors" },
+  "license": "MIT",
+  "types": "./types/index.d.ts"
+}

@@ -1,0 +1,14 @@
+{
+  "name": "openknowledge-sdlc",
+  "owner": { "name": "okf-loop contributors" },
+  "metadata": {
+    "description": "Mods that run the AI-Native SDLC knowledge base (openknowledge/INDEX.md) inside Claude Code."
+  },
+  "plugins": [
+    {
+      "name": "okf-loop",
+      "source": "./mods/okf-loop",
+      "description": "Runs openknowledge/INDEX.md: the AI-Native SDLC as a live, customizable, semi-autonomous loop with gates, guards and an audit trail."
+    }
+  ]
+}
