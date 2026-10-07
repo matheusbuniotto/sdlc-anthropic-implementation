@@ -1,0 +1,46 @@
+---
+id: okf-template-bands
+title: "Template: Statistical Control Bands (bands.yaml)"
+type: template
+stage: stage-6-maintain
+last_updated: "2026-10-06"
+summary: Template for defining statistical process control bands for production metrics and mapping breaches to autonomous agent actions.
+---
+
+# Statistical Control Bands Specification
+# Used by deterministic observability scripts to trigger autonomous agents
+
+metric: ci_test_failure_rate
+description: "Percentage of CI test runs failing on the main branch over rolling window"
+baseline: rolling_30d
+interval: 1h
+rules: western_electric
+
+tiers:
+  # 1-Sigma: Standard variance. Informational only.
+  1sigma:
+    action: log
+    notify: false
+
+  # 2-Sigma: Statistical drift or early degradation detected.
+  # Invoke Claude headlessly with read-only tools to diagnose root cause.
+  2sigma:
+    action: diagnose
+    tools:
+      - "Read"
+      - "Grep"
+      - "Bash(gh run view *)"
+      - "Bash(gh pr list *)"
+    output_format: intent_markdown
+    destination: "intent/anomaly-${DATE}.md"
+
+  # 3-Sigma: Critical anomaly or catastrophic breach.
+  # Authorize autonomous mitigation through pre-approved runbooks or revert PRs.
+  3sigma:
+    action: propose
+    routes:
+      - pull_request:revert
+      - runbook:rollback-deploy
+    escalation:
+      channel: "#inc-checkout"
+      priority: P1

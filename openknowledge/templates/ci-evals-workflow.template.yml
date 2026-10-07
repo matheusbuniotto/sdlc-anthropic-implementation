@@ -1,0 +1,76 @@
+name: Agent Continuous Evals
+
+on:
+  pull_request:
+    paths:
+      - 'CLAUDE.md'
+      - '.claude/**'
+      - '.agents/**'
+      - 'evals/**'
+  schedule:
+    # Run nightly at 02:00 UTC to catch foundation model drift
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  agent-eval-suite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout Codebase
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Execute Eval Benchmark Suite
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          EVAL_STRICT_MODE: "true"
+        run: |
+          mkdir -p evals/results
+          PASSED=0
+          FAILED=0
+          TOTAL=0
+
+          for eval_file in evals/*.json; do
+            [ -e "$eval_file" ] || continue
+            TOTAL=$((TOTAL + 1))
+            EVAL_ID=$(jq -r '.id' "$eval_file")
+            PROMPT=$(jq -r '.prompt' "$eval_file")
+            echo "----------------------------------------------------"
+            echo "Executing Eval [$TOTAL]: $EVAL_ID"
+            
+            # Run headless agent session with restricted toolset
+            claude -p "$PROMPT" \
+              --allowedTools "Read,Edit,Bash(make test)" \
+              --output-format json > "evals/results/${EVAL_ID}.json" || true
+            
+            # Run deterministic verification script
+            if ./evals/check.sh "$eval_file" "evals/results/${EVAL_ID}.json"; then
+              echo "Eval $EVAL_ID: PASSED"
+              PASSED=$((PASSED + 1))
+            else
+              echo "Eval $EVAL_ID: FAILED"
+              FAILED=$((FAILED + 1))
+            fi
+          done
+
+          echo "===================================================="
+          echo "Eval Summary: Total=$TOTAL, Passed=$PASSED, Failed=$FAILED"
+          
+          # Calculate Pass Rate (Target >= 90%)
+          if [ $TOTAL -gt 0 ]; then
+            PASS_RATE=$(( (PASSED * 100) / TOTAL ))
+            echo "Pass Rate: ${PASS_RATE}%"
+            if [ $PASS_RATE -lt 90 ]; then
+              echo "ERROR: Pass rate fell below 90% threshold!"
+              exit 1
+            fi
+          fi
