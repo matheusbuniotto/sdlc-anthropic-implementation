@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "ai-native-sdlc": {
+      "command": "node",
+      "args": [
+        "/Users/matheus/rea/worktrees/sdlc-wrapper/bin/sdlc-mcp.js"
+      ],
+      "env": {
+        "NODE_ENV": "production"
+      }
+    }
+  }
+}
