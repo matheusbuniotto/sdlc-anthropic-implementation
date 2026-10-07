@@ -37,6 +37,25 @@ graph TD
 
 ---
 
+## Run it: the `okf-loop` mod
+
+The knowledge base is also a runtime. **[`mods/okf-loop`](./mods/okf-loop/README.md)** is a Claude Code mod
+that *runs* `openknowledge/INDEX.md` — the six stages as live gates, the 14 plays as adoptable modules, the
+hook guards as deterministic `tool.call` rules, the control bands as a Stage 6 watcher — with a tabbed Loop
+pane, a status band above the prompt, and a semi-autonomous autopilot that stops at every human gate.
+
+```text
+/plugin install okf-loop --marketplace <owner>/<repo>     # or: claude --plugin-dir ./mods/okf-loop
+/sdlc init                                                 # scaffold CLAUDE.md, REVIEW.md, bands.yaml, ...
+/sdlc new add rate limiting                                # intent → spec → plan → proof → review → release
+```
+
+It reads this repository's front-matter for the play graph and templates (a snapshot is bundled; a project's
+own `openknowledge/` overrides it) and is configured with a single `.okf/config.json`. MIT licensed.
+See [`docs/CUSTOMIZING.md`](./mods/okf-loop/docs/CUSTOMIZING.md) and [`docs/ARCHITECTURE.md`](./mods/okf-loop/docs/ARCHITECTURE.md).
+
+---
+
 ## Repository Map
 
 ```text

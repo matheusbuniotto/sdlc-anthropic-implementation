@@ -39,7 +39,8 @@ export type DeriveInput = {
 
 // A requirement plus the failure phrased as a problem, for `blockedBy`.
 type Req = Requirement & { problem?: string }
-type Parts = { machine: Req[]; human: Req[]; humanOk: boolean }
+// `veto`: the gate cannot be approved whatever else holds (a person said no, or the evidence it rests on went stale).
+type Parts = { machine: Req[]; human: Req[]; humanOk: boolean; veto?: boolean }
 type DocKind = 'intent' | 'spec' | 'plan'
 
 const FILE: Record<DocKind, string> = { intent: 'intent.md', spec: 'spec.md', plan: 'plan.md' }
@@ -121,6 +122,12 @@ function verifyParts(input: DeriveInput): Parts {
 
 const norm = (s: string): string => s.replace(/[[\]]/g, '').trim().toLowerCase()
 
+// Same freshness rule as the proof: source edited after the review makes it history, not evidence.
+function reviewStale(input: DeriveInput): boolean {
+  const doc = docOf(input, 'review')
+  return doc.exists && doc.mtimeMs < input.record.proof.lastEditAt
+}
+
 function reviewParts(input: DeriveInput): Parts {
   const doc = docOf(input, 'review')
   const rev = input.review ?? { passes: [], importantOpen: 0, nits: 0, verdict: null }
@@ -129,9 +136,12 @@ function reviewParts(input: DeriveInput): Parts {
   const missing = input.config.review.passes.map((p) => p.tag).filter((t) => !have.has(norm(t)))
   const nitsOk = rev.nits <= cap || rev.nitOverflowSummarized === true
   const open = rev.importantOpen
+  const stale = reviewStale(input)
   return {
+    veto: stale,
     machine: [
       req('machine', 'exists', 'Review file exists', doc.exists, doc.path, 'The three-pass review has not been written yet'),
+      req('machine', 'fresh', 'Nothing was edited after the review', doc.exists && !stale, undefined, 'Source changed after the review was written'),
       req('machine', 'passes', `All ${input.config.review.passes.length} review passes are recorded`, doc.exists && missing.length === 0, missing.length ? `Missing: ${missing.join(', ')}` : undefined, `The review lacks the ${missing.join(', ')} pass`),
       req('machine', 'important', 'No open Important findings', doc.exists && open === 0, open > 0 ? `${open} open` : undefined, `${open} Important finding${open === 1 ? ' is' : 's are'} still open`),
       req('machine', 'nits', `Nits stay within the cap of ${cap}`, doc.exists && nitsOk, `${rev.nits} nit${rev.nits === 1 ? '' : 's'}`, `${rev.nits} nits exceed the cap of ${cap}`),
@@ -148,7 +158,7 @@ function partsFor(id: GateId, input: DeriveInput): Parts {
     case 'intent.approve': {
       const doc = docOf(input, 'intent')
       const ok = doc.status === 'approved'
-      return { machine: docParts('intent', input), human: [req('human', 'approved', 'Product owner approves intent.md', ok, statusDetail(doc, ok ? approvalNote(input, id) : undefined))], humanOk: ok }
+      return { machine: docParts('intent', input), human: [req('human', 'approved', 'Product owner approves intent.md', ok, statusDetail(doc, ok ? approvalNote(input, id) : undefined))], humanOk: ok, veto: doc.status === 'rejected' }
     }
     case 'spec.approve': {
       const doc = docOf(input, 'spec')
@@ -163,12 +173,15 @@ function partsFor(id: GateId, input: DeriveInput): Parts {
           req('human', 'approved', 'Product owner approves spec.md', ok, statusDetail(doc, ok ? approvalNote(input, id) : undefined)),
         ],
         humanOk: ok,
+        veto: doc.status === 'rejected',
       }
     }
     case 'plan.accept': {
       const doc = docOf(input, 'plan')
-      const ok = ACCEPTED.includes(doc.status)
-      return { machine: docParts('plan', input), human: [req('human', 'accepted', 'Engineer accepts plan.md before any code', ok, statusDetail(doc, ok ? approvalNote(input, id) : undefined))], humanOk: ok }
+      // The agent may legitimately write in-progress/complete itself, so those only
+      // count once a human acceptance was recorded (the wiring records a hand-edited `accepted`).
+      const ok = doc.status === 'accepted' || (ACCEPTED.includes(doc.status) && approval !== undefined)
+      return { machine: docParts('plan', input), human: [req('human', 'accepted', 'Engineer accepts plan.md before any code', ok, statusDetail(doc, ok ? approvalNote(input, id) : undefined))], humanOk: ok, veto: doc.status === 'rejected' }
     }
     case 'verify.pass':
       return verifyParts(input)
@@ -184,6 +197,8 @@ function partsFor(id: GateId, input: DeriveInput): Parts {
           req('human', 'grant', 'Release grant or RELEASE_APPROVAL token is live', grant, grant ? 'Production commands are unlocked' : 'Production commands stay blocked until a human grants'),
         ],
         humanOk: approval !== undefined,
+        // No release on a review that is not (or no longer) passing.
+        veto: !review.approved,
       }
     }
   }
@@ -215,7 +230,7 @@ export function evaluateGate(id: GateId, input: DeriveInput): GateReport {
     kind: needsHuman ? 'human' : 'machine',
     requirements,
     ready,
-    approved: needsHuman ? parts.humanOk : ready,
+    approved: (needsHuman ? parts.humanOk : ready) && !parts.veto,
     blockedBy: failing.map((r) => r.problem ?? r.label),
   }
 }
@@ -333,7 +348,8 @@ export function deriveRun(input: DeriveInput): RunSnapshot {
   const kinds: CoreKind[] = ['intent', 'spec', 'plan', 'proof', 'review']
   const docs = Object.fromEntries(kinds.map((k) => [k, docOf(input, k)])) as Record<CoreKind, ArtifactDoc>
   const rev = input.review
-  const reviewBlocked = docs.review.exists && rev !== null && (rev.importantOpen > 0 || rev.verdict === 'BLOCKED')
+  // A blocked review that predates the latest edit is stale: review again rather than fix again.
+  const reviewBlocked = docs.review.exists && !reviewStale(input) && rev !== null && (rev.importantOpen > 0 || rev.verdict === 'BLOCKED')
   // A FAIL older than the last edit is stale: the fix was made, so the next step is to verify again, not to fix again.
   const verifyFailed = docs.proof.exists && input.proofVerdict === 'FAIL' && docs.proof.mtimeMs >= input.record.proof.lastEditAt
   const facts: Facts = { input, gates, docs, reviewBlocked, verifyFailed }

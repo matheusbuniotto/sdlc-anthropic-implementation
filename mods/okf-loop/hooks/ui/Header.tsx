@@ -4,7 +4,7 @@
 import type { RenderElement } from 'claude-code'
 
 import { UI_TABS } from '../core/constants'
-import { btn, flow, txt, type Ctx, type Item } from './kit'
+import { btn, flow, heldElsewhere, txt, type Ctx, type Item } from './kit'
 import {
   C,
   autopilotChip,
@@ -60,7 +60,8 @@ function runPicker(ctx: Ctx): RenderElement[] {
   const run = vm.active
   if (!run) {
     const more = vm.runs.length > 0 ? ` · ${vm.runs.length} ${vm.runs.length === 1 ? 'run' : 'runs'} to pick up` : ''
-    return flow(ctx, [txt(ctx, [dim(`No active run${more}`)])], w)
+    const held = heldElsewhere(vm)
+    return flow(ctx, [txt(ctx, [dim(`No active run${more}`)]), ...(held > 0 ? [txt(ctx, [{ t: `⚠ ${held} held`, color: C.human }])] : [])], w, 2)
   }
   const idx = Math.max(0, vm.runs.findIndex(r => r.slug === run.record.slug))
   const many = vm.runs.length > 1
@@ -70,9 +71,11 @@ function runPicker(ctx: Ctx): RenderElement[] {
   }
   const health = healthChip(run.health)
   const source: Seg[] = run.record.source === 'human' ? [] : [{ t: run.record.source === 'anomaly' ? '⟲ anomaly' : 'ticket', dimColor: true }]
+  const elsewhere = heldElsewhere(vm)
   const side: Item[] = [
     txt(ctx, [{ t: health.text, color: health.color }]),
     ...(source.length ? [txt(ctx, source)] : []),
+    ...(elsewhere > 0 ? [txt(ctx, [{ t: `⚠ ${elsewhere} held in other ${elsewhere === 1 ? 'run' : 'runs'}`, color: C.human }])] : []),
   ]
   const arrows = many ? 5 + 5 + 3 + `${idx + 1}/${vm.runs.length}`.length : 0
   const room = w - arrows - side.reduce((n, s) => n + s.w + 1, 0) - 1

@@ -140,7 +140,8 @@ function sentence(raw: string): string {
   const flat = raw.replace(/\s+/g, ' ').trim()
   if (flat === '') return ''
   const capped = flat.length > 200 ? `${flat.slice(0, 199)}…` : flat
-  const cased = capped.charAt(0).toUpperCase() + capped.slice(1)
+  // Identifiers (verify.pass, add-login, ci_failure_rate) keep their spelling.
+  const cased = /^[A-Za-z]+(\s|$)/.test(capped) ? capped.charAt(0).toUpperCase() + capped.slice(1) : capped
   return /[.!?…]$/.test(cased) ? cased : `${cased}.`
 }
 
@@ -155,16 +156,16 @@ function derive(e: LedgerEntry): string | null {
       return `${who(e)} started run ${e.run ?? 'a new run'}${title ? `: ${title}` : ''}`
     }
     case 'stage.entered':
-      return e.stage ? `${e.run ?? 'The run'} entered the ${STAGE_META[e.stage].name} stage` : null
+      return e.stage ? `${e.run ? `Run ${e.run}` : 'The run'} entered the ${STAGE_META[e.stage].name} stage` : null
     case 'artifact.written': {
       const target = text(d, 'path') ?? (text(d, 'kind') ? `the ${text(d, 'kind')} artifact` : null)
       return target ? `${who(e)} wrote ${target}${on}` : null
     }
     case 'gate.opened':
-      return gate ? `${gate} is ready for a human decision${on}` : null
+      return gate ? `Gate ${gate} is ready for a human decision${on}` : null
     case 'gate.approved':
       if (!gate) return null
-      return e.actor === 'mod' ? `${gate} passed its machine checks${on}` : `${who(e)} approved ${gate}${on}`
+      return e.actor === 'mod' ? `Gate ${gate} passed its machine checks${on}` : `${who(e)} approved ${gate}${on}`
     case 'gate.rejected': {
       if (!gate) return null
       const reason = text(d, 'reason')
@@ -193,7 +194,7 @@ function derive(e: LedgerEntry): string | null {
     case 'band.breach': {
       const metric = text(d, 'metric')
       const tier = text(d, 'tier')
-      return metric ? `${metric} breached its control band${tier ? ` (${tier})` : ''}` : null
+      return metric ? `Metric ${metric} breached its control band${tier ? ` (${tier})` : ''}` : null
     }
     case 'incident.intent': {
       const metric = text(d, 'metric')

@@ -7,5 +7,6 @@ TMP="$(mktemp -d "${TMPDIR:-/tmp}/okf-test.XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT
 rsync -a --exclude tests "$MOD/" "$TMP/"
 mkdir -p "$TMP/tests"
+find "$MOD/tests" -maxdepth 1 -type f ! -name "*.test.*" -exec cp {} "$TMP/tests/" \;
 for f in "$@"; do mkdir -p "$TMP/$(dirname "$f")"; cp "$MOD/$f" "$TMP/$f"; done
 (cd "$TMP" && claude plugin test .)

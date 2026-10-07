@@ -93,7 +93,7 @@ export const GUARD_RULE = lines(
   '## If a guard blocks you',
   'okf-loop guards are deterministic hooks, not suggestions. When a tool call is refused:',
   '1. Read the whole message. It names the guard, explains why, and ends with a "Do instead:" path.',
-  '2. Take the "Do instead" path. Do not retry the same call, reword it, split it across several commands, or reach the same effect through another tool.',
+  '2. Take the "Do instead" path. Do not retry the same call, reword it, split it across several commands, or reach the same effect through another tool. Never try to bypass a guard.',
   '3. If no compliant path exists, stop and tell the human what was blocked and which decision you need from them.',
 )
 
@@ -137,14 +137,15 @@ export function stopAtGate(a: { gate: string; file: string; look: string }): str
   )
 }
 
-export function verifyBlock(ctx: PromptContext): string {
+export function verifyBlock(ctx: PromptContext, planNamesProof = true): string {
   const cmds = ctx.verifyCommands
+  const plan = planNamesProof ? ' and every command the plan names under Proof of Correctness' : ''
   return cmds.length > 0
     ? lines(
         `The harness recognises these as proof commands: ${cmds.map(code).join(', ')}.`,
-        `Run the ones this repository actually uses (see "Verifying Your Work" in ${code(ctx.paths.claudeMd)}) and every command the plan names under Proof of Correctness.`,
+        `Run the ones this repository actually uses (see "Verifying Your Work" in ${code(ctx.paths.claudeMd)})${plan}.`,
       )
-    : `No proof commands are configured. Use the commands in ${code(ctx.paths.claudeMd)} ("Verifying Your Work") and the plan's Proof of Correctness.`
+    : `No proof commands are configured. Use the commands in ${code(ctx.paths.claudeMd)} ("Verifying Your Work")${planNamesProof ? " and the plan's Proof of Correctness" : ''}.`
 }
 
 // -- artifact skeletons (the section names are the contract with artifacts.ts) ----------------

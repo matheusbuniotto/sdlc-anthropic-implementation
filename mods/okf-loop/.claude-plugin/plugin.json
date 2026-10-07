@@ -4,5 +4,27 @@
   "description": "Runs openknowledge/INDEX.md: the AI-Native SDLC as a live, customizable, semi-autonomous loop with gates, guards and an audit trail.",
   "author": { "name": "okf-loop contributors" },
   "license": "MIT",
-  "types": "./types/index.d.ts"
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "mode": {
+      "type": "string",
+      "title": "Autonomy mode",
+      "description": "How much the loop does on its own. 'config' keeps whatever .okf/config.json (or /sdlc mode) says; manual only guards and records, guided proposes the next step, semi chains every non-human step and stops at each human gate.",
+      "options": ["config", "manual", "guided", "semi"],
+      "default": "config"
+    },
+    "maxAutoTurns": {
+      "type": "number",
+      "title": "Autopilot turn budget",
+      "description": "Agent turns the autopilot may queue between two human gates. 0 keeps autonomy.maxAutoTurns from .okf/config.json.",
+      "default": 0
+    },
+    "openPaneOnStart": {
+      "type": "string",
+      "title": "Open the Loop pane at session start",
+      "description": "'config' keeps ui.openPaneOnStart from .okf/config.json; yes or no overrides it.",
+      "options": ["config", "yes", "no"],
+      "default": "config"
+    }
+  }
 }

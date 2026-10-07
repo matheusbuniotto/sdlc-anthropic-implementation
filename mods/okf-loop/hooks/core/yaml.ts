@@ -414,6 +414,7 @@ function parseDocument(src: string): unknown {
   lines = lines.slice(start)
   const end = lines.findIndex(l => l.indent === 0 && (l.text === '---' || l.text === '...'))
   if (end >= 0) lines = lines.slice(0, end)
+  if (lines.every(l => l.blank || l.text.startsWith('#'))) return undefined
   return parseLines(lines)
 }
 

@@ -70,15 +70,20 @@ for (const line of index.split('\n')) {
 }
 // The mermaid graph only draws part of the edges; report the ones it omits so a reader is not misled.
 const drawn = new Set<string>()
-for (const m of index.matchAll(/\bP(\d+)\[[^\]]*\]\s*(?:-->|-\.->)\s*P(\d+)\[/g)) drawn.add(`${m[1]}>${m[2]}`)
-for (const m of index.matchAll(/\bP(\d+)\s*(?:-->|-\.->)\s*P(\d+)\[/g)) drawn.add(`${m[1]}>${m[2]}`)
+for (const m of index.matchAll(/\bP(\d+)(?:\[[^\]]*\])?\s*(?:-->|-\.->)\s*P(\d+)\b/g)) drawn.add(`${m[1]}>${m[2]}`)
 const undrawn: string[] = []
 for (const p of knowledge.plays) for (const q of p.prerequisites) if (!drawn.has(`${q}>${p.n}`)) undrawn.push(`${q}->${p.n}`)
 
 // --- emit ----------------------------------------------------------------
 
 function q(s: string): string {
-  return `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/ /g, '\\u2028').replace(/ /g, '\\u2029')}'`
+  const body = s
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r')
+    .replace(/[\u2028\u2029]/g, (c) => (c === '\u2028' ? '\\u2028' : '\\u2029'))
+  return `'${body}'`
 }
 
 const list = (xs: string[]): string => (xs.length === 0 ? '[]' : `[${xs.map(q).join(', ')}]`)

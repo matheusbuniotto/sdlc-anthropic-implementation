@@ -1,0 +1,647 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "okf-loop configuration",
+  "description": "Settings for the okf-loop mod, read from .okf/config.json in the project. Every key is optional: what is missing is filled from the defaults, and a value that does not validate is replaced by its default and reported in the pane (Setup tab). Lists replace the default list, they do not extend it.",
+  "type": "object",
+  "additionalProperties": false,
+  "examples": [
+    {
+      "autonomy": {
+        "mode": "guided",
+        "maxAutoTurns": 8
+      },
+      "guards": {
+        "protectedBranches": [
+          "main",
+          "release"
+        ]
+      }
+    }
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Path or URL of this schema, for editor completion and validation. Optional."
+    },
+    "version": {
+      "const": 1,
+      "default": 1,
+      "description": "Config format version. Always 1."
+    },
+    "knowledge": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Where the knowledge base (plays, stages, templates) comes from.",
+      "properties": {
+        "root": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?![/~])(?![A-Za-z]:)(?!.*\\.\\.(?:/|$)).+",
+          "default": "openknowledge",
+          "description": "Directory, relative to the repository, holding the project's own openknowledge/ tree. When it exists its plays, stages and templates override the snapshot bundled with the mod, per play number and per template."
+        }
+      }
+    },
+    "autonomy": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "How far the mod may drive the loop on its own. It never passes a human gate, whatever is set here.",
+      "properties": {
+        "mode": {
+          "enum": [
+            "manual",
+            "guided",
+            "semi"
+          ],
+          "default": "semi",
+          "description": "manual: guards and the ledger only. guided: the mod proposes the next step and a person triggers it. semi: the agent runs every non-human step itself (draft spec, draft plan, implement, verify, review) and stops at the next human gate. semi degrades to guided while Play 04 is disabled."
+        },
+        "maxAutoTurns": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 12,
+          "description": "Autopilot turns allowed between two human gates. When the budget is spent the autopilot halts until a person passes a gate or resumes it."
+        },
+        "haltOnBlocks": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20,
+          "default": 3,
+          "description": "Halt the autopilot after this many guard blocks in a row without a good step in between."
+        },
+        "haltOnVerifyFails": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20,
+          "default": 3,
+          "description": "Halt the autopilot after this many failed verifications in a row."
+        },
+        "humanGates": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "intent.approve",
+              "spec.approve",
+              "plan.accept",
+              "verify.pass",
+              "review.pass",
+              "release.approve"
+            ]
+          },
+          "uniqueItems": true,
+          "default": [
+            "intent.approve",
+            "spec.approve",
+            "plan.accept",
+            "release.approve"
+          ],
+          "description": "Gates that need a named person. release.approve is always required and is restored if removed. A gate that is not listed passes on its own once its machine requirements hold; verify.pass and review.pass are machine gates and only need a person if you list them."
+        },
+        "autoKinds": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "interview",
+              "draft-spec",
+              "draft-plan",
+              "implement",
+              "verify",
+              "review",
+              "await-human",
+              "release",
+              "monitor",
+              "idle"
+            ]
+          },
+          "uniqueItems": true,
+          "default": [
+            "draft-spec",
+            "draft-plan",
+            "implement",
+            "verify",
+            "review"
+          ],
+          "description": "Next-action kinds the autopilot may run unattended in semi mode. Steps that are for a person (gates, the interview, release) are never run by the autopilot."
+        }
+      }
+    },
+    "plays": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Which of the 14 plays of openknowledge/INDEX.md are adopted. Each adopted play switches real behaviour on (guards, scaffolds, prompts).",
+      "properties": {
+        "enabled": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99
+          },
+          "uniqueItems": true,
+          "default": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            10,
+            11
+          ],
+          "description": "Adopted play numbers. A play needs every prerequisite adopted too (Play 11 needs Play 07, and so on); on load, a play whose prerequisite is not adopted is switched off and reported. A play cannot be disabled while an adopted play depends on it."
+        }
+      }
+    },
+    "paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Where artifacts live. {slug} (the run slug) and {date} (YYYY-MM-DD) expand.",
+      "properties": {
+        "intent": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stage 1 artifact (intent.md), one per run. {slug} expands to the run slug. Must be relative to the repository; only {slug} and {date} expand. Must contain {slug}.",
+          "pattern": "^(?![/~])(?![A-Za-z]:)(?!.*\\.\\.(?:/|$)).*\\{slug\\}",
+          "default": "intent/{slug}.md"
+        },
+        "spec": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stage 2 artifact (spec.md), one per run. Must be relative to the repository; only {slug} and {date} expand. Must contain {slug}.",
+          "pattern": "^(?![/~])(?![A-Za-z]:)(?!.*\\.\\.(?:/|$)).*\\{slug\\}",
+          "default": "specs/{slug}.spec.md"
+        },
+        "plan": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stage 3 artifact (plan.md), one per run. Source edits wait until its Status is accepted. Must be relative to the repository; only {slug} and {date} expand. Must contain {slug}.",
+          "pattern": "^(?![/~])(?![A-Za-z]:)(?!.*\\.\\.(?:/|$)).*\\{slug\\}",
+          "default": "plans/{slug}.plan.md"
+        },
+        "proof": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stage 4 verifier report, one per run. It must contain \"### Verification Verdict: PASS\" or \"FAIL\". Must be relative to the repository; only {slug} and {date} expand. Must contain {slug}.",
+          "pattern": "^(?![/~])(?![A-Za-z]:)(?!.*\\.\\.(?:/|$)).*\\{slug\\}",
+          "default": "proofs/{slug}.proof.md"
+        },
+        "review": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stage 5 three-pass review, one per run (format: Pass headings with [Tag], findings, \"### Review Verdict: CLEAN|BLOCKED\"). Must be relative to the repository; only {slug} and {date} expand. Must contain {slug}.",
+          "pattern": "^(?![/~])(?![A-Za-z]:)(?!.*\\.\\.(?:/|$)).*\\{slug\\}",
+          "default": "reviews/{slug}.review.md"
+        },
+        "incident": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stage 6 to Stage 1: the intent the control bands write when a metric breaches. {date} expands to YYYY-MM-DD. Must be relative to the repository; only {slug} and {date} expand.",
+          "pattern": "^(?![/~])(?![A-Za-z]:)(?!.*\\.\\.(?:/|$)).+",
+          "default": "intent/incident-{date}.md"
+        },
+        "lesson": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Play 14 post-mortem. {date} and {slug} expand. Must be relative to the repository; only {slug} and {date} expand.",
+          "pattern": "^(?![/~])(?![A-Za-z]:)(?!.*\\.\\.(?:/|$)).+",
+          "default": "lessons/{date}-{slug}.md"
+        },
+        "eval": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Plays 09/14 regression eval for a run or an incident. {slug} expands. Must be relative to the repository; only {slug} and {date} expand.",
+          "pattern": "^(?![/~])(?![A-Za-z]:)(?!.*\\.\\.(?:/|$)).+",
+          "default": "evals/{slug}.json"
+        },
+        "claudeMd": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Repository memory file (Play 05). Must be relative to the repository; only {slug} and {date} expand.",
+          "pattern": "^(?![/~])(?![A-Za-z]:)(?!.*\\.\\.(?:/|$)).+",
+          "default": "CLAUDE.md"
+        },
+        "reviewPolicy": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The review policy the reviewer follows (Play 10). Must be relative to the repository; only {slug} and {date} expand.",
+          "pattern": "^(?![/~])(?![A-Za-z]:)(?!.*\\.\\.(?:/|$)).+",
+          "default": "REVIEW.md"
+        },
+        "bands": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Statistical control bands definition (Play 13). Must be relative to the repository; only {slug} and {date} expand.",
+          "pattern": "^(?![/~])(?![A-Za-z]:)(?!.*\\.\\.(?:/|$)).+",
+          "default": "bands.yaml"
+        },
+        "ciWorkflow": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The CI evals workflow scaffolded from the template (Play 09). Must be relative to the repository; only {slug} and {date} expand.",
+          "pattern": "^(?![/~])(?![A-Za-z]:)(?!.*\\.\\.(?:/|$)).+",
+          "default": ".github/workflows/agent-evals.yml"
+        },
+        "managedSettings": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Enterprise managed-settings scaffold (Play 12). It is a template to hand to your admins, not a live setting. Must be relative to the repository; only {slug} and {date} expand.",
+          "pattern": "^(?![/~])(?![A-Za-z]:)(?!.*\\.\\.(?:/|$)).+",
+          "default": ".okf/enterprise-managed-settings.json"
+        },
+        "productionGate": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The production approval gate hook script (Play 11). Must be relative to the repository; only {slug} and {date} expand.",
+          "pattern": "^(?![/~])(?![A-Za-z]:)(?!.*\\.\\.(?:/|$)).+",
+          "default": ".claude/hooks/production-gate.sh"
+        }
+      }
+    },
+    "guards": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Deterministic tool-call guards. A guard is active only when its play is adopted and it is not listed in `disabled`. Pattern lists replace the defaults.",
+      "properties": {
+        "disabled": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "protect-paths",
+              "secret-leak",
+              "plan-first",
+              "test-lock",
+              "production-gate",
+              "destructive-sql",
+              "credential-shield",
+              "separation-of-duties",
+              "gate-integrity"
+            ]
+          },
+          "uniqueItems": true,
+          "default": [],
+          "description": "Guards switched off by hand. They stay visible, marked off, in the Guards tab."
+        },
+        "protectedPaths": {
+          "type": "array",
+          "description": "Globs the agent may not edit (protect-paths). The default includes .okf/** so no agent tool can change the mod's own config, ledger or run state.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "default": [
+            "schemas/generated/**",
+            "api/v1/frozen/**",
+            ".env",
+            ".env.*",
+            "**/.env",
+            "**/.env.*",
+            "secrets/**",
+            ".okf/**"
+          ]
+        },
+        "testGlobs": {
+          "type": "array",
+          "description": "Globs that identify test files; they are locked while a bug-fix protocol is active (test-lock).",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "default": [
+            "tests/**",
+            "test/**",
+            "__tests__/**",
+            "**/*.test.*",
+            "**/*.spec.*",
+            "**/test_*.py",
+            "**/*_test.go"
+          ]
+        },
+        "planFirstExempt": {
+          "type": "array",
+          "description": "Globs that stay editable before a plan is accepted: artifacts, docs and the mod's own files (plan-first).",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "default": [
+            "**/*.md",
+            "intent/**",
+            "specs/**",
+            "plans/**",
+            "proofs/**",
+            "reviews/**",
+            "lessons/**",
+            "evals/**",
+            ".okf/**",
+            ".claude/**",
+            "openknowledge/**"
+          ]
+        },
+        "secretPatterns": {
+          "type": "array",
+          "description": "Regular expressions for secrets that must never be written (secret-leak). A source may start with (?i) for case-insensitive. The default list lives in hooks/core/guards.ts; a list given here replaces it.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "pattern"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Shown in the denial message; the matched secret itself is never echoed."
+              },
+              "pattern": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Regular expression source."
+              }
+            }
+          }
+        },
+        "productionPatterns": {
+          "type": "array",
+          "description": "Regular expressions, tested case-insensitively against Bash commands: a match is a production deploy that needs a release token or a human grant (production-gate). The default list lives in hooks/core/guards.ts; a list given here replaces it.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "destructiveSql": {
+          "type": "boolean",
+          "default": true,
+          "description": "Refuse DROP, TRUNCATE and DELETE FROM in Bash commands even with a release grant (destructive-sql)."
+        },
+        "protectedBranches": {
+          "type": "array",
+          "description": "Branches the agent may not push to, force-push or merge into (separation-of-duties).",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "default": [
+            "main",
+            "master"
+          ]
+        },
+        "credentialPaths": {
+          "type": "array",
+          "description": "Globs the agent may not read, edit or touch from Bash: SSH keys, cloud credentials, .env files (credential-shield). ~ is the home directory.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "default": [
+            "~/.ssh/**",
+            "~/.aws/**",
+            "~/.config/gcloud/**",
+            "**/.env",
+            "**/.env.*",
+            "secrets/**"
+          ]
+        },
+        "blockNetwork": {
+          "type": "boolean",
+          "default": false,
+          "description": "Also block curl, wget and WebFetch, as the managed-settings template does (credential-shield). Off by default."
+        },
+        "grantMinutes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 480,
+          "default": 15,
+          "description": "Minutes a human release grant (/sdlc release grant) stays valid."
+        }
+      }
+    },
+    "verify": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Verification feedback loop (Play 08).",
+      "properties": {
+        "commands": {
+          "type": "array",
+          "description": "Commands the proof tracker recognizes as verification runs: a Bash command that contains one of them counts, and its exit status decides pass or fail.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "default": [
+            "make test",
+            "make lint",
+            "make build",
+            "npm test",
+            "npm run test",
+            "npm run lint",
+            "pnpm test",
+            "yarn test",
+            "pytest",
+            "cargo test",
+            "go test",
+            "bun test"
+          ]
+        }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The three-pass review (Play 10) as the mod reads it.",
+      "properties": {
+        "nitCap": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50,
+          "default": 5,
+          "description": "Most nits a review may list. More are summarized in one overflow line; a review over the cap without that line does not pass."
+        },
+        "passes": {
+          "type": "array",
+          "minItems": 1,
+          "default": [
+            {
+              "tag": "Bugs",
+              "title": "Logic & Regressions"
+            },
+            {
+              "tag": "Security",
+              "title": "Security & Privacy"
+            },
+            {
+              "tag": "Compliance",
+              "title": "Specification & Architecture Alignment"
+            }
+          ],
+          "description": "The review passes, in order. Every tag must appear in a \"### Pass N — Title [Tag]\" heading of the review for it to count as complete.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "tag",
+              "title"
+            ],
+            "properties": {
+              "tag": {
+                "type": "string",
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
+                "description": "Tag written in brackets on every finding of the pass, e.g. Bugs."
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Heading text of the pass, e.g. \"Logic & Regressions\"."
+              }
+            }
+          }
+        },
+        "ignorePaths": {
+          "type": "array",
+          "description": "Globs the reviewer must not evaluate: generated files, vendor bundles, lockfiles.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "default": [
+            "src/gen/**",
+            "build/**",
+            "*.min.js",
+            "package-lock.json",
+            "yarn.lock"
+          ]
+        }
+      }
+    },
+    "bands": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Statistical control bands (Play 13): metrics sampled on a timer, judged with Western Electric rules, tiered response.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run the watcher: sample the sources and evaluate the bands."
+        },
+        "sources": {
+          "type": "array",
+          "default": [],
+          "description": "Metrics to sample. Each is a command run without a shell; its stdout is parsed into one number.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "metric",
+              "argv"
+            ],
+            "properties": {
+              "metric": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$",
+                "description": "Plain name, also the sample file name under .okf/bands/ and the key of the metric in bands.yaml."
+              },
+              "description": {
+                "type": "string",
+                "default": "",
+                "description": "What the metric measures."
+              },
+              "argv": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "description": "The command and its arguments, no shell."
+              },
+              "parse": {
+                "type": "string",
+                "pattern": "^(number|json:\\S+)$",
+                "default": "number",
+                "description": "\"number\": stdout is a number. \"json:a.b.0.c\": the number at that path of the JSON on stdout."
+              },
+              "intervalMinutes": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10080,
+                "default": 60,
+                "description": "Minutes between samples."
+              },
+              "higherIsWorse": {
+                "type": "boolean",
+                "default": true,
+                "description": "true: a rising value is worse (failure rate). false: a falling value is worse (throughput)."
+              }
+            }
+          }
+        },
+        "window": {
+          "type": "integer",
+          "minimum": 8,
+          "maximum": 500,
+          "default": 30,
+          "description": "Rolling window in samples for the mean and standard deviation. At least 8, the samples needed before a band is judged."
+        },
+        "tier3": {
+          "enum": [
+            "propose",
+            "runbook"
+          ],
+          "default": "propose",
+          "description": "What a 3-sigma breach does. propose: write a proposal a person approves (the mod never acts alone). runbook: run `runbook` once a person approves."
+        },
+        "runbook": {
+          "type": "array",
+          "description": "Commands run after a person approves a 3-sigma breach when tier3 is \"runbook\".",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "default": []
+        }
+      }
+    },
+    "ui": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Interface preferences.",
+      "properties": {
+        "openPaneOnStart": {
+          "type": "boolean",
+          "default": false,
+          "description": "Open the Loop pane when a session starts (wide terminals only)."
+        },
+        "showBand": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the one-line band above the prompt while a run exists."
+        }
+      }
+    },
+    "policySkills": {
+      "type": "array",
+      "description": "Globs of policy skills and docs the design stage must load (Plays 02 and 06).",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true,
+      "default": [
+        ".claude/skills/**/SKILL.md",
+        "CLAUDE.md"
+      ]
+    }
+  }
+}

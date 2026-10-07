@@ -53,7 +53,7 @@ export function implement(ctx: PromptContext): string {
       '## Verification block',
       verifyBlock(ctx),
       list([
-        'Run them as the last thing you do, after every source edit and after any CLAUDE.md edit. The harness trusts a passing proof run only if it came after your last edit.',
+        'Run them last: after every source edit and after any CLAUDE.md edit, before you set the plan Status. The harness trusts a passing proof run only if it came after your last edit.',
         'Paste the literal terminal output of each command into your final message. Not a summary, not "all green": the output itself.',
         'If anything fails, fix the code and run them again.',
       ]),
@@ -63,6 +63,16 @@ export function implement(ctx: PromptContext): string {
       'draft | accepted | in-progress | complete',
       list([
         `Set ${code(plan)} to \`**Status:** complete\` ONLY when every step of the Order of Work is done AND the verification commands passed in this session after your last edit, with their literal output pasted. Otherwise leave it \`in-progress\` and say what remains.`,
+        'Only a human sets `accepted`; you move it from `accepted` to `in-progress` to `complete`.',
+      ]),
+    ),
+    lines(
+      '## Do not',
+      list([
+        `Edit a file outside Files That Change without updating ${code(plan)} first, or touch the spec or the intent.`,
+        `Edit ${code(ctx.paths.proof)} or ${code(ctx.paths.review)}, or run the verifier or the reviewer yourself.`,
+        'Change, weaken, skip or delete a test; write to protected paths; put a secret into a file.',
+        'Deploy, merge, push to a protected branch, or run destructive SQL.',
         NEVER_APPROVE,
       ]),
     ),
@@ -100,8 +110,8 @@ export function verify(ctx: PromptContext): string {
       '## Inputs',
       list([
         `${code(ctx.paths.plan)}: Status must be \`complete\`. Its Proof of Correctness is what gets checked.`,
-        verifyBlock(ctx),
       ]),
+      verifyBlock(ctx),
     ),
     lines(
       '## Steps',
@@ -174,12 +184,11 @@ export function review(ctx: PromptContext): string {
       '```markdown',
       `# Review: ${ctx.title}`,
       ...example,
-      'Found 4 additional minor naming/formatting nits; skipping detail to prevent review fatigue.',
       '### Review Verdict: BLOCKED',
       '```',
       list([
         'An unchecked `- [ ] **Important**` is an open blocker; `- [x] **Important**` is one the reviewer confirms fixed since the last round.',
-        `\`**Nit**\` bullets: at most ${ctx.nitCap}. Only when more nits exist, add one aggregated overflow line after the last pass with the real count of omitted nits, in exactly the wording above; no detail.`,
+        `\`**Nit**\` bullets: at most ${ctx.nitCap}. Only when more nits exist, add one line after the last pass, no detail: \`Found 4 additional minor naming/formatting nits; skipping detail to prevent review fatigue.\` with the real number omitted in place of 4.`,
         'A pass without findings says `No findings.`',
         'The last line is `### Review Verdict: CLEAN` (no open Important) or `### Review Verdict: BLOCKED` (at least one).',
         'Important is reserved for findings that break behaviour, leak data or violate compliance. Naming, formatting and idiom are Nit.',
@@ -199,7 +208,7 @@ export function review(ctx: PromptContext): string {
         `${code(out)} holds the reviewer’s report with every pass and a verdict line, nits within the cap.`,
         'Final message: verdict, count of open Important findings with one line each, nit count.',
       ]),
-      'Then stop. BLOCKED sends the run back to implementation by itself. CLEAN opens the release gate, which only a human can pass: tell the release manager to read the review file and the diff, then authorise with `/sdlc release grant` (or the Grant button in the /sdlc pane).',
+      'Then stop. BLOCKED sends the run back to implementation. CLEAN opens the release gate, which only a human can pass: tell the release manager to read the review file and the diff, then authorise with `/sdlc release grant` (or the Grant button in the /sdlc pane).',
     ),
     GUARD_RULE,
     playbook('review', ctx),
@@ -222,8 +231,8 @@ export function release(ctx: PromptContext): string {
         `Confirm ${code(ctx.paths.plan)} is \`complete\`, ${code(ctx.paths.proof)} says PASS and ${code(ctx.paths.review)} says CLEAN. If any is not true, stop and tell the human; do not deploy.`,
         'The window is short (the /sdlc pane shows the countdown). Deploy first, write notes after.',
         'Prepare the release candidate: clean working tree on the reviewed branch, the verification commands pass once more, and the artifact or image is the one that was reviewed.',
-        verifyBlock(ctx),
       ]),
+      verifyBlock(ctx),
     ),
     lines(
       '## Unlocked for this window',
@@ -234,7 +243,7 @@ export function release(ctx: PromptContext): string {
       ]),
     ),
     lines(
-      '## Still forbidden, grant or no grant',
+      '## Do not, grant or no grant',
       list([
         'Destructive SQL (DROP, TRUNCATE, DELETE FROM): the guard refuses it even now. Do not attempt it.',
         'Merging or pushing to a protected branch (main, master), approving or merging a pull request. If the deploy needs a merged commit, say so and let a human merge.',
@@ -244,8 +253,8 @@ export function release(ctx: PromptContext): string {
       ]),
     ),
     lines(
-      '## If the gate blocks you',
-      'If the deploy is refused (grant expired or revoked, wrong command class), the human closed the window. Stop. Do not retry, rephrase, or look for another route; report what was refused and ask the human to grant again with `/sdlc release grant`. For every other guard, read the message, take its "Do instead" path, and never bypass it.',
+      '## If the deploy itself is refused',
+      'A refusal of the deploy (grant expired or revoked, wrong command class) means the human closed the window. Stop. Do not retry, rephrase, or look for another route; report what was refused and ask the human to grant again with `/sdlc release grant`.',
     ),
     lines(
       '## Completion criteria',
@@ -255,6 +264,7 @@ export function release(ctx: PromptContext): string {
       ]),
       'Then stop. Release notes stay in your message unless the plan lists a file for them.',
     ),
+    GUARD_RULE,
     playbook('release', ctx),
   )
 }
@@ -266,8 +276,9 @@ export function fix(ctx: PromptContext): string {
     header(
       'fix',
       ctx,
-      `Fix this defect under the strict three-step bug-fix protocol: ${ctx.title}. A failing test that predates the fix and that you could not alter is the proof the defect is resolved.`,
+      'Fix the defect below under the strict three-step bug-fix protocol. A failing test that predates the fix, and that you could not alter, is the proof the defect is resolved.',
     ),
+    lines('## The defect', ctx.title),
     situation(ctx, 'Bug report'),
     lines(
       '## Step A: reproduce, and nothing else',
@@ -292,7 +303,7 @@ export function fix(ctx: PromptContext): string {
         'Run the reproduction test (it must pass), then the full verification commands, and paste the literal output.',
         'Commit the fix on its own, for example `git commit -m "fix: <symptom>"`.',
       ]),
-      verifyBlock(ctx),
+      verifyBlock(ctx, false),
     ),
     lines(
       '## Twice Rule',

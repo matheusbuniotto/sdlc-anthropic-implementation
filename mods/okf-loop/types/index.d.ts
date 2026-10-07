@@ -550,6 +550,8 @@ export type ViewModel = {
   metrics: MetricView[]
   bands: BandView[]
   setup: SetupItem[]
+  /** Approvals that appeared on disk while the agent was working and have no record the mod wrote: held until a human confirms. */
+  quarantined: { slug: string; gate: GateId; path: string; detail: string }[]
   /** Transient one-line message of the last command or press ("Spec approved."). */
   notice: string
 }
@@ -581,6 +583,8 @@ export type UiActions = {
   newRun(idea: string): void
   selectRun(slug: string): void
   approve(gate: GateId): void
+  /** Confirm a quarantined approval on the active run (same effect as approve, but for a gate the file already claims). */
+  confirm(gate: GateId): void
   reject(gate: GateId): void
   runNext(): void
   setMode(mode: Mode): void
